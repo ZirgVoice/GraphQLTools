@@ -397,7 +397,7 @@ extension Generator {
                     let computedFields = try object.fields.filter { field in
                          try data.objects.contains {
                              try swiftTypeName(field.type)
-                                 .replacingOccurrences(of: "?", with: "") == $0.name.value && field.name.value != "node"
+                                 .replacingOccurrences(of: "?", with: "") == $0.name.value && field.name.value != "node" && field.name.value != "pageInfo"
                          } || !field.arguments.isEmpty
                     }
                     let basicFields = object.fields.filter{!computedFields.contains($0)}
