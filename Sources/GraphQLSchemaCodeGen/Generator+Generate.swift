@@ -86,17 +86,30 @@ extension Generator {
 
     func printObjectTypes() throws {
         guard !data.objects.isEmpty || !data.inputs.isEmpty else { return }
+        var objects = data.objects
+        
+        objects.removeAll { object in
+            options.typeMapping.contains { key, _ in
+                key == object.name.value
+            }
+        }
+        
         println()
-        mark("Types")
+        mark("Types")        
         try scoped("extension \(data.schemaName)", scope: .curly) {
-            try looped(data.objects) { object in
+            try looped(objects) { object in
                 let objectInterfaces = object.interfaces.map { $0.name.value } + ["Codable"]
                 try scoped(
                     "struct \(object.name.value): \(objectInterfaces.joined(separator: ", "))",
                     scope: .curly
                 ) {
-                    let basicFields = object.fields.filter { $0.arguments.isEmpty }
-                    let computedFields = object.fields.filter { !$0.arguments.isEmpty }
+                    let computedFields = try object.fields.filter { field in
+                         try objects.contains {
+                             try swiftTypeName(field.type)
+                                 .replacingOccurrences(of: "?", with: "") == $0.name.value && field.name.value != "node"
+                         } || !field.arguments.isEmpty
+                    }
+                    let basicFields = object.fields.filter{!computedFields.contains($0)}
 
                     for field in basicFields {
                         try println("let \(field.name.value): \(swiftTypeName(field.type))")
@@ -104,21 +117,26 @@ extension Generator {
 
                     if !computedFields.isEmpty {
                         println()
-
+                        
                         try looped(computedFields) { field in
-                            try scoped(
-                                "struct \(field.name.value.capitalizeFirst)Arguments: Codable",
-                                scope: .curly
-                            ) {
-                                for argument in field.arguments {
-                                    try println(
-                                        "let \(argument.name.value): \(swiftTypeName(argument.type))"
-                                    )
+                            var argumentStructName = "NoArguments"
+                            if !field.arguments.isEmpty {
+                                argumentStructName = "\(field.name.value.capitalizeFirst)Arguments"
+                                try scoped(
+                                    "struct \(argumentStructName): Codable",
+                                    scope: .curly
+                                ) {
+                                    for argument in field.arguments {
+                                        try println(
+                                            "let \(argument.name.value): \(swiftTypeName(argument.type))"
+                                        )
+                                    }
                                 }
+                                println()
                             }
-                            println()
+
                             try scoped(
-                                "func _\(field.name.value)<ContextType>(context: ContextType, args: \(field.name.value.capitalizeFirst)Arguments) async throws -> \(swiftTypeName(field.type))",
+                                "func _\(field.name.value)<ContextType>(context: ContextType, args: \(argumentStructName)) async throws -> \(swiftTypeName(field.type))",
                                 scope: .curly
                             ) {
                                 scoped(
@@ -141,8 +159,12 @@ extension Generator {
                             println("associatedtype ContextType")
                             println()
                             for field in computedFields {
+                                var argumentStructName = "NoArguments"
+                                if !field.arguments.isEmpty {
+                                    argumentStructName = "\(field.name.value.capitalizeFirst)Arguments"
+                                }
                                 try println(
-                                    "func \(field.name.value)(context: ContextType, args: \(field.name.value.capitalizeFirst)Arguments) async throws -> \(swiftTypeName(field.type))"
+                                    "func \(field.name.value)(context: ContextType, args: \(argumentStructName)) async throws -> \(swiftTypeName(field.type))"
                                 )
                             }
                         }
@@ -162,8 +184,15 @@ extension Generator {
                 }
             }
             if !data.inputs.isEmpty {
+                var inputs = data.inputs
+                
+                inputs.removeAll { inputs in
+                    options.typeMapping.contains { key, _ in
+                        key == inputs.name.value
+                    }
+                }
                 println()
-                try looped(data.inputs) { object in
+                try looped(inputs) { object in
                     try scoped("struct \(object.name.value): Codable", scope: .curly) {
                         for field in object.fields {
                             try println("let \(field.name.value): \(swiftTypeName(field.type))")
@@ -172,12 +201,19 @@ extension Generator {
                 }
             }
             if !data.enums.isEmpty {
+                var enums = data.enums
+                
+                enums.removeAll { enums in
+                    options.typeMapping.contains { key, _ in
+                        key == enums.name.value
+                    }
+                }
                 println()
-                looped(data.enums) { object in
+                looped(enums) { object in
                     scoped("enum \(object.name.value): String, Codable", scope: .curly) {
                         for value in object.values {
                             println(
-                                "case \(value.name.value.lowercased()) = \"\(value.name.value)\"")
+                                "case \(value.name.value.toCamelCase()) = \"\(value.name.value)\"")
                         }
                     }
                 }
@@ -357,16 +393,28 @@ extension Generator {
                         "Type(\(object.name.value).self, as: \"\(object.name.value)\", interfaces: [\(objectInterfaces.joined(separator: ", "))])"
                 }
 
-                scoped(typeDeclaration, scope: .curly) {
-                    for field in object.fields {
-                        if field.arguments.isEmpty {
-                            println("Field(\"\(field.name.value)\", at: \\.\(field.name.value))")
+                try scoped(typeDeclaration, scope: .curly) {
+                    let computedFields = try object.fields.filter { field in
+                         try data.objects.contains {
+                             try swiftTypeName(field.type)
+                                 .replacingOccurrences(of: "?", with: "") == $0.name.value && field.name.value != "node"
+                         } || !field.arguments.isEmpty
+                    }
+                    let basicFields = object.fields.filter{!computedFields.contains($0)}
+                    
+                    for basicField in basicFields {
+                        println("Field(\"\(basicField.name.value)\", at: \\.\(basicField.name.value))")
+                    }
+                    
+                    for computedField in computedFields {
+                        if computedField.arguments.isEmpty {
+                            println("Field(\"\(computedField.name.value)\", at: \(object.name.value)._\(computedField.name.value))")
                         } else {
                             scoped(
-                                "Field(\"\(field.name.value)\", at: \(object.name.value)._\(field.name.value))",
+                                "Field(\"\(computedField.name.value)\", at: \(object.name.value)._\(computedField.name.value))",
                                 scope: .curly
                             ) {
-                                for argument in field.arguments {
+                                for argument in computedField.arguments {
                                     println(
                                         "Argument(\"\(argument.name.value)\", at: \\.\(argument.name.value))"
                                     )
@@ -395,7 +443,7 @@ extension Generator {
             for object in data.enums {
                 scoped("Enum(\(object.name.value).self)", scope: .curly) {
                     for value in object.values {
-                        println("Value(.\(value.name.value.lowercased()))")
+                        println("Value(.\(value.name.value.toCamelCase()))")
                     }
                 }
             }
@@ -458,5 +506,13 @@ extension Generator {
                 }
             }
         }
+    }
+}
+
+private extension String {
+    func toCamelCase() -> String {
+        let components = self.lowercased().split(separator: "_")
+        guard let first = components.first else { return "" }
+        return first + components.dropFirst().map { $0.capitalized }.joined()
     }
 }
