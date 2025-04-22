@@ -123,7 +123,7 @@ extension Generator {
                             if !field.arguments.isEmpty {
                                 argumentStructName = "\(field.name.value.capitalizeFirst)Arguments"
                                 try scoped(
-                                    "struct \(argumentStructName): Codable",
+                                    "struct \(argumentStructName): Codable, Hashable",
                                     scope: .curly
                                 ) {
                                     for argument in field.arguments {
@@ -193,7 +193,7 @@ extension Generator {
                 }
                 println()
                 try looped(inputs) { object in
-                    try scoped("struct \(object.name.value): Codable", scope: .curly) {
+                    try scoped("struct \(object.name.value): Codable, Hashable", scope: .curly) {
                         for field in object.fields {
                             try println("let \(field.name.value): \(swiftTypeName(field.type))")
                         }
