@@ -10,7 +10,7 @@ extension Generator {
         printSDL()
         printTypeMapping()
         try printObjectTypes()
-        try printObjectResolverDefaultImplementation()
+//        try printObjectResolverDefaultImplementation()
         try printResolverArguments()
         try printResolverProtocol()
         try printResolverProtocolDefaultImplemention()
@@ -232,25 +232,25 @@ extension Generator {
         }
     }
 
-    func printObjectResolverDefaultImplementation() throws {
-        guard options.generateDefaultImplementation else { return }
-        for object in data.objects {
-            let computedFields = object.fields.filter { !$0.arguments.isEmpty }
-            guard !computedFields.isEmpty else { continue }
-            println()
-            try scoped("extension \(data.schemaName).\(object.name.value).Resolver", scope: .curly) {
-                try looped(computedFields) { field in
-                    try scoped(
-                        "func \(field.name.value)(context: ContextType, args: \(data.schemaName).\(object.name.value).\(field.name.value.capitalizeFirst)Arguments) async throws -> \(swiftTypeName(field.type, namespace: data.schemaName))",
-                        scope: .curly
-                    ) {
-                        printThrowError(
-                            "\(object.name.value).\(field.name.value) is unimplemented.")
-                    }
-                }
-            }
-        }
-    }
+//    func printObjectResolverDefaultImplementation() throws {
+//        guard options.generateDefaultImplementation else { return }
+//        for object in data.objects {
+//            let computedFields = object.fields.filter { !$0.arguments.isEmpty }
+//            guard !computedFields.isEmpty else { continue }
+//            println()
+//            try scoped("extension \(data.schemaName).\(object.name.value).Resolver", scope: .curly) {
+//                try looped(computedFields) { field in
+//                    try scoped(
+//                        "func \(field.name.value)(context: ContextType, args: \(data.schemaName).\(object.name.value).\(field.name.value.capitalizeFirst)Arguments) async throws -> \(swiftTypeName(field.type, namespace: data.schemaName))",
+//                        scope: .curly
+//                    ) {
+//                        printThrowError(
+//                            "\(object.name.value).\(field.name.value) is unimplemented.")
+//                    }
+//                }
+//            }
+//        }
+//    }
 
     func printResolverArguments() throws {
         println()

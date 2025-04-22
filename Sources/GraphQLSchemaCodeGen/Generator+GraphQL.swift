@@ -218,7 +218,11 @@ extension Generator {
         case let type as NonNullType:
             return try swiftTypeName(type.type, namespace: namespace, nestedInNonNull: true)
         case let type as ListType:
-            return try "[\(swiftTypeName(type.type, namespace: namespace))]"
+            if nestedInNonNull {
+                return try "[\(swiftTypeName(type.type, namespace: namespace))]"
+            } else {
+                return try "[\(swiftTypeName(type.type, namespace: namespace))]?"
+            }
         default:
             throw GeneratorError(description: "Unknown type \(type) to convert to swift type")
         }
